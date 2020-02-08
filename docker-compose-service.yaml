@@ -1,0 +1,23 @@
+version: "3.7"
+services:
+
+  url-shortener:
+    build: .
+    environment:
+      - REDIS_ADDRESS=redis:6379
+      - REDIS_DATABASE=0
+      - SLUGS_SALT=some_salt
+      - SLUGS_MINLENGTH=16
+      - LOGGER_LEVEL=trace
+      - LOGGER_TIMESTAMP=true
+      - LOGGER_PRETTY=true
+      - MUX_LOG_REQUESTS=true
+      - MUX_LOG_ELAPSEDTIME=true
+    ports:
+      - 8080:8080
+    external_links:
+      - redis:redis
+
+networks:
+  custom:
+    external: true

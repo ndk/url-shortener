@@ -1,0 +1,22 @@
+version: "3.7"
+services:
+
+  redis:
+    image: redis:latest
+    hostname: redis
+    container_name: redis
+    ports:
+      - 6379:6379
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    hostname: redis-commander
+    links:
+      - redis
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - 8090:8081
+
+networks:
+  custom:
+    external: true
