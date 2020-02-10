@@ -39,14 +39,14 @@ Creates a new short URL
 Request:
 ```json
 {
-    "url": {url}
+    "url": "$url"
 }
 ```
 Response:
 ```json
 {
     "data": {
-        "slug": {slug}
+        "slug": "$slug"
     }
 }
 ```
