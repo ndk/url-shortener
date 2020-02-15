@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/opentracing/opentracing-go"
 
 	"url-shortener/internal/logger"
 	httplogger "url-shortener/internal/logger/http"
@@ -19,6 +20,19 @@ func NewRouter(cfg *Config, logger *logger.Logger, handlers Handlers) http.Handl
 	r := chi.NewRouter()
 	{
 		r.Use(httplogger.NewHandler(*logger))
+		if !cfg.JaegerDisabled {
+			r.Use(func(next http.Handler) http.Handler {
+				fn := func(w http.ResponseWriter, r *http.Request) {
+					span, ctx := opentracing.StartSpanFromContext(r.Context(), r.URL.String())
+					defer span.Finish()
+
+					r = r.WithContext(opentracing.ContextWithSpan(ctx, span))
+
+					next.ServeHTTP(w, r)
+				}
+				return http.HandlerFunc(fn)
+			})
+		}
 		if cfg.LogElapsedTime {
 			r.Use(httplogger.ElapsedTime)
 		}

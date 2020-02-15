@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"url-shortener/internal/logger"
+	"url-shortener/internal/storage"
 )
 
 type slugifier interface {
@@ -12,13 +13,9 @@ type slugifier interface {
 	DecodeSlug(slug string) (instanceIndex int64, slugIndex int64, err error)
 }
 
-type SaveValue func(key string, value string) error
-type LoadValue func(key string) (string, error)
-
 type registry struct {
 	slugifier     slugifier
-	saveValue     SaveValue
-	loadValue     LoadValue
+	storage       storage.Storage
 	instanceIndex int64
 	slugsCount    int64
 }
@@ -31,7 +28,7 @@ func (r *registry) RegisterURL(ctx context.Context, url string) (string, error) 
 	logger.Ctx(ctx).Trace().Str("slug", slug).Msg("The new slug has been produced")
 
 	key := fmt.Sprintf("%d:%d", r.instanceIndex, r.slugsCount)
-	if err := r.saveValue(key, url); err != nil {
+	if err := r.storage.SaveValue(ctx, key, url); err != nil {
 		logger.Ctx(ctx).Error().Err(err).Str("key", key).Str("url", url).Msg("Cannot create a record")
 		return "", err
 	}
@@ -47,7 +44,7 @@ func (r *registry) GetURL(ctx context.Context, slug string) (string, error) {
 	}
 
 	key := fmt.Sprintf("%d:%d", instanceIndex, slugIndex)
-	url, err := r.loadValue(key)
+	url, err := r.storage.LoadValue(ctx, key)
 	if err != nil {
 		logger.Ctx(ctx).Error().Err(err).Str("key", key).Msg("Cannot read a value")
 		return "", err
@@ -56,11 +53,10 @@ func (r *registry) GetURL(ctx context.Context, slug string) (string, error) {
 	return url, nil
 }
 
-func NewRegistry(slugifier slugifier, saveValue SaveValue, loadValue LoadValue, instanceIndex int64) *registry {
+func NewRegistry(slugifier slugifier, storage storage.Storage, instanceIndex int64) *registry {
 	return &registry{
 		slugifier:     slugifier,
-		saveValue:     saveValue,
-		loadValue:     loadValue,
+		storage:       storage,
 		instanceIndex: instanceIndex,
 	}
 }

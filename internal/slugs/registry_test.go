@@ -10,6 +10,20 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+type mockStorage struct {
+	m *mock.Mock
+}
+
+func (s *mockStorage) SaveValue(ctx context.Context, key string, value string) error {
+	args := s.m.Called(ctx, key, value)
+	return args.Error(0)
+}
+
+func (s *mockStorage) LoadValue(ctx context.Context, key string) (string, error) {
+	args := s.m.Called(ctx, key)
+	return args.String(0), args.Error(1)
+}
+
 type mockSlugifier struct {
 	m *mock.Mock
 }
@@ -27,16 +41,17 @@ func (s *mockSlugifier) DecodeSlug(slug string) (instanceIndex int64, slugIndex 
 func TestRegisterURL(t *testing.T) {
 	Convey("Test RegisterURL", t, func() {
 		m := &mock.Mock{}
-		s := &mockSlugifier{m: m}
+
+		r := registry{
+			slugifier:     &mockSlugifier{m: m},
+			instanceIndex: 5,
+			slugsCount:    19,
+			storage:       &mockStorage{m: m},
+		}
 
 		Convey("It fails if the slugifier has failed", func() {
-			r := registry{
-				slugifier:     s,
-				instanceIndex: 5,
-				slugsCount:    19,
-			}
-
-			m.On("NewSlug", int64(5), int64(19)).Return("", errors.New("NewSlug error"))
+			m.
+				On("NewSlug", int64(5), int64(19)).Return("", errors.New("NewSlug error"))
 
 			_, err := r.RegisterURL(nil, "")
 
@@ -47,19 +62,9 @@ func TestRegisterURL(t *testing.T) {
 		})
 
 		Convey("It fails if the value cannot be saved", func() {
-			r := registry{
-				slugifier:     s,
-				instanceIndex: 5,
-				slugsCount:    19,
-				saveValue: func(key string, value string) error {
-					args := m.Called(key, value)
-					return args.Error(0)
-				},
-			}
-
 			m.
 				On("NewSlug", int64(5), int64(19)).Return("qwe", nil).
-				On("1", "5:19", "http://en.wikipedia.com").Return(errors.New("saveValue error"))
+				On("SaveValue", mock.Anything, "5:19", "http://en.wikipedia.com").Return(errors.New("saveValue error"))
 
 			_, err := r.RegisterURL(context.TODO(), "http://en.wikipedia.com")
 
@@ -70,21 +75,11 @@ func TestRegisterURL(t *testing.T) {
 		})
 
 		Convey("It returns a new slug", func() {
-			r := registry{
-				slugifier:     s,
-				instanceIndex: 5,
-				slugsCount:    19,
-				saveValue: func(key string, value string) error {
-					args := m.Called(key, value)
-					return args.Error(0)
-				},
-			}
-
 			m.
 				On("NewSlug", int64(5), int64(19)).Return("qwe", nil).
-				On("1", "5:19", "http://en.wikipedia.com").Return(nil).
+				On("SaveValue", mock.Anything, "5:19", "http://en.wikipedia.com").Return(nil).
 				On("NewSlug", int64(5), int64(20)).Return("asd", nil).
-				On("1", "5:20", "http://en.wikipedia.com").Return(nil)
+				On("SaveValue", mock.Anything, "5:20", "http://en.wikipedia.com").Return(nil)
 
 			{
 				slug, err := r.RegisterURL(context.TODO(), "http://en.wikipedia.com")
@@ -109,19 +104,15 @@ func TestRegisterURL(t *testing.T) {
 func TestGetURL(t *testing.T) {
 	Convey("Test GetURL", t, func() {
 		m := &mock.Mock{}
-		s := &mockSlugifier{m: m}
+
+		r := registry{
+			slugifier:     &mockSlugifier{m: m},
+			instanceIndex: 5,
+			slugsCount:    19,
+			storage:       &mockStorage{m: m},
+		}
 
 		Convey("It fails if the slugifier has failed", func() {
-			r := registry{
-				slugifier:     s,
-				instanceIndex: 5,
-				slugsCount:    19,
-				saveValue: func(key string, value string) error {
-					args := m.Called(key, value)
-					return args.Error(0)
-				},
-			}
-
 			m.
 				On("DecodeSlug", "123").Return(int64(321), int64(432), errors.New("DecodeSlug error"))
 
@@ -134,19 +125,9 @@ func TestGetURL(t *testing.T) {
 		})
 
 		Convey("It fails if the value cannot be loaded", func() {
-			r := registry{
-				slugifier:     s,
-				instanceIndex: 5,
-				slugsCount:    19,
-				loadValue: func(key string) (string, error) {
-					args := m.Called(key)
-					return args.String(0), args.Error(1)
-				},
-			}
-
 			m.
 				On("DecodeSlug", "123").Return(int64(321), int64(432), nil).
-				On("1", "321:432").Return("", errors.New("loadValue error"))
+				On("LoadValue", mock.Anything, "321:432").Return("", errors.New("loadValue error"))
 
 			_, err := r.GetURL(context.TODO(), "123")
 
@@ -157,19 +138,9 @@ func TestGetURL(t *testing.T) {
 		})
 
 		Convey("It returns the correct URL", func() {
-			r := registry{
-				slugifier:     s,
-				instanceIndex: 5,
-				slugsCount:    19,
-				loadValue: func(key string) (string, error) {
-					args := m.Called(key)
-					return args.String(0), args.Error(1)
-				},
-			}
-
 			m.
 				On("DecodeSlug", "123").Return(int64(321), int64(432), nil).
-				On("1", "321:432").Return("http://uber.com", nil)
+				On("LoadValue", mock.Anything, "321:432").Return("http://uber.com", nil)
 
 			url, err := r.GetURL(context.TODO(), "123")
 
@@ -183,11 +154,13 @@ func TestGetURL(t *testing.T) {
 }
 
 func TestNewRegistry(t *testing.T) {
-	s := &mockSlugifier{}
-	r := NewRegistry(s, nil, nil, 178)
+	slugifier := &mockSlugifier{}
+	storage := &mockStorage{}
+	r := NewRegistry(slugifier, storage, 178)
 	assert.Equal(t,
 		&registry{
-			slugifier:     s,
+			slugifier:     slugifier,
+			storage:       storage,
 			instanceIndex: 178,
 		},
 		r,

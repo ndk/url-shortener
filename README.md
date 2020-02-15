@@ -85,7 +85,6 @@ Example:
 - [ ] Use go.uber.org/automaxprocs
 - [ ] Use validators
 - [ ] Metrics
-- [ ] Tracing
 - [ ] Documentation (godoc)
 - [ ] Swagger
 - [ ] CI/CD
