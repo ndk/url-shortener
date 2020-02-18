@@ -5,5 +5,6 @@ import (
 )
 
 var NewHandler = hlog.NewHandler
+var IDFromCtx = hlog.IDFromCtx
 var RequestIDHandler = hlog.RequestIDHandler
 var FromRequest = hlog.FromRequest
